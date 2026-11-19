@@ -116,7 +116,7 @@ try {
 
   const seen = {};
   let all = [];
-  list.concat(upcoming).forEach(m => { if (m.id && !seen[m.id] && !m.stale) { seen[m.id] = 1; all.push(m); } });
+  list.concat(upcoming).forEach(m => { if (m.id && !seen[m.id] && !m.stale && m.teams.length >= 2 && !m.teams.some(t => /^\s*tbc\s*$/i.test(String(t.name)))) { seen[m.id] = 1; all.push(m); } });
 
   const live = all.filter(m => m.live).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   const up   = all.filter(m => !m.started && !m.ended).sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(0, 24);
