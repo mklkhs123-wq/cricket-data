@@ -1,0 +1,37 @@
+name: Update cricket data
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cricket-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch cricket data
+        run: node fetch.mjs
+        env:
+          CRIC_API_KEY: ${{ secrets.CRIC_API_KEY }}
+          CRIC_MODE: ${{ vars.CRIC_MODE }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
+
+      - name: Save changes
+        run: |
+          git config user.name "cricket-bot"
+          git config user.email "cricket-bot@users.noreply.github.com"
+          git add cricket.json
+          git diff --cached --quiet || (git commit -m "update cricket data" && git push)
