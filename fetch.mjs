@@ -27,6 +27,16 @@ async function api(path, params = {}) {
   return j;
 }
 
+function inferType(m) {
+  const t = String(m.matchType || '').toUpperCase();
+  if (t) return t;
+  const n = String(m.name || '');
+  if (/\btest\b/i.test(n)) return 'TEST';
+  if (/t20/i.test(n)) return 'T20';
+  if (/\bodi\b/i.test(n)) return 'ODI';
+  return '';
+}
+
 function norm(m) {
   const info = m.teamInfo || [];
   const names = (m.teams && m.teams.length) ? m.teams : info.map(t => t.name);
@@ -40,10 +50,14 @@ function norm(m) {
   const started = !!m.matchStarted, ended = !!m.matchEnded;
   let iso = m.dateTimeGMT || null;
   if (iso && !/Z$/.test(iso)) iso += 'Z';
+  const type = inferType(m);
+  // API kabhi purane match ko "ended=false" chhod deti hai; aise purane match ko live na maanein
+  const maxAge = type === 'TEST' ? 6 * 864e5 : 20 * 36e5;
+  const stale = started && !ended && iso && (Date.now() - Date.parse(iso)) > maxAge;
   return {
-    id: m.id, name: m.name || '', type: String(m.matchType || '').toUpperCase(),
+    id: m.id, name: m.name || '', type,
     status: m.status || '', venue: m.venue || '', start: iso,
-    started, ended, live: started && !ended, teams
+    started, ended, live: started && !ended && !stale, stale: !!stale, teams
   };
 }
 
@@ -102,7 +116,7 @@ try {
 
   const seen = {};
   let all = [];
-  list.concat(upcoming).forEach(m => { if (m.id && !seen[m.id]) { seen[m.id] = 1; all.push(m); } });
+  list.concat(upcoming).forEach(m => { if (m.id && !seen[m.id] && !m.stale) { seen[m.id] = 1; all.push(m); } });
 
   const live = all.filter(m => m.live).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
   const up   = all.filter(m => !m.started && !m.ended).sort((a, b) => Date.parse(a.start) - Date.parse(b.start)).slice(0, 24);
@@ -120,7 +134,7 @@ try {
 
   const out = {
     updated: new Date().toISOString(), upcomingAt, mode: MODE, refreshMin: CFG.refreshMin,
-    matches: live.concat(up, done)
+    matches: live.concat(up, done).map(m => { delete m.stale; return m; })
   };
   fs.writeFileSync(OUT, JSON.stringify(out));
   console.log('OK:', live.length, 'live,', up.length, 'upcoming,', done.length, 'done. mode=' + MODE);
